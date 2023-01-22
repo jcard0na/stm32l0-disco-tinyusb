@@ -1,0 +1,13 @@
+[tasks.build]
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.flash]
+command = "./openocd_flash.sh"
+args = ["target/thumbv6m-none-eabi/release/stm32l0-disco-tinyusb"]
+dependencies = ["build"]
+
+[tasks.semiflash]
+command = "./openocd_flash_monitor.sh"
+args = ["target/thumbv6m-none-eabi/release/stm32l0-disco-tinyusb"]
+dependencies = ["build"]
