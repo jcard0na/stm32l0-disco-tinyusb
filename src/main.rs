@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-use cortex_m::prelude::_embedded_hal_blocking_delay_DelayMs;
 // use cortex_m_semihosting::hprintln;
 // pick a panicking behavior
 use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
@@ -14,30 +13,67 @@ use cortex_m_rt::entry;
 use stm32l0xx_hal as hal;
 
 use hal::{
-    delay::Delay,
     gpio::GpioExt,
     pac,
-    prelude::ToggleableOutputPin,
     rcc::{self, RccExt},
+    usb::{UsbBus, USB}, syscfg::SYSCFG, prelude::OutputPin,
 };
+
+use usb_device::prelude::*;
+use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 #[entry]
 fn main() -> ! {
-    let cp = pac::CorePeripherals::take().unwrap();
     let dp = pac::Peripherals::take().unwrap();
 
     let mut rcc = dp.RCC.freeze(rcc::Config::hsi16());
-    let gpioa = dp.GPIOA.split(&mut rcc);
-    let gpiob = dp.GPIOB.split(&mut rcc);
-    let mut rled = gpioa.pa5.into_push_pull_output();
-    let mut gled = gpiob.pb4.into_push_pull_output();
-    let mut delay = Delay::new(cp.SYST, rcc.clocks);
+    let mut syscfg = SYSCFG::new(dp.SYSCFG, &mut rcc);
+    let hsi48 = rcc.enable_hsi48(&mut syscfg, dp.CRS);
 
-    rled.toggle().ok();
+    let gpioa = dp.GPIOA.split(&mut rcc);
+
+    let mut rled = gpioa.pa5.into_push_pull_output();
+    let usb = USB::new(dp.USB, gpioa.pa11, gpioa.pa12, hsi48);
+    let usb_bus = UsbBus::new(usb);
+
+    let mut serial = SerialPort::new(&usb_bus);
+
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+        .manufacturer("Fake company")
+        .product("Serial port")
+        .serial_number("TEST")
+        .device_class(USB_CLASS_CDC)
+        .build();
+
     loop {
-        rled.toggle().ok();
-        gled.toggle().ok();
-        delay.delay_ms(1000u32);
-        // hprintln!("boing");
+        if !usb_dev.poll(&mut [&mut serial]) {
+            continue;
+        }
+
+        let mut buf = [0u8; 64];
+
+        match serial.read(&mut buf) {
+            Ok(count) if count > 0 => {
+                rled.set_high().ok();
+                // Echo back in upper case
+                for c in buf[0..count].iter_mut() {
+                    if 0x61 <= *c && *c <= 0x7a {
+                        *c &= !0x20;
+                    }
+                }
+
+                let mut write_offset = 0;
+                while write_offset < count {
+                    match serial.write(&buf[write_offset..count]) {
+                        Ok(len) if len > 0 => {
+                            write_offset += len;
+                        }
+                        _ => {}
+                    }
+                }
+                rled.set_low().ok();
+            }
+            _ => {}
+        }
     }
 }
