@@ -14,6 +14,7 @@ stm32l0xx-hal = { version = "0.10.0", features = ["stm32-usbd", "mcu-STM32L053C8
 stm32-usbd = "0.6.0"
 usb-device = "0.2.9"
 usbd-serial = "0.1.1"
+usbd_mass_storage = "0.1.0"
 
 # this lets you use `cargo fix`!
 [[bin]]

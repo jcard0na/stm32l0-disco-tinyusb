@@ -15,12 +15,14 @@ use stm32l0xx_hal as hal;
 use hal::{
     gpio::GpioExt,
     pac,
+    prelude::OutputPin,
     rcc::{self, RccExt},
-    usb::{UsbBus, USB}, syscfg::SYSCFG, prelude::OutputPin,
+    syscfg::SYSCFG,
+    usb::{UsbBus, USB},
 };
 
 use usb_device::prelude::*;
-use usbd_serial::{SerialPort, USB_CLASS_CDC};
+use usbd_mass_storage::{MscClass, USB_CLASS_MSC};
 
 #[entry]
 fn main() -> ! {
@@ -36,23 +38,29 @@ fn main() -> ! {
     let usb = USB::new(dp.USB, gpioa.pa11, gpioa.pa12, hsi48);
     let usb_bus = UsbBus::new(usb);
 
-    let mut serial = SerialPort::new(&usb_bus);
+    let mut msc = MscClass::new(
+        &usb_bus,
+        64u16,
+        usbd_mass_storage::InterfaceSubclass::Ufi,
+        usbd_mass_storage::InterfaceProtocol::BulkOnlyTransport,
+    );
+    // let mut serial = SerialPort::new(&usb_bus);
 
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x0930, 0x6545))
         .manufacturer("Fake company")
-        .product("Serial port")
+        .product("Fake MSC")
         .serial_number("TEST")
-        .device_class(USB_CLASS_CDC)
+        .device_class(USB_CLASS_MSC)
         .build();
 
     loop {
-        if !usb_dev.poll(&mut [&mut serial]) {
+        if !usb_dev.poll(&mut [&mut msc]) {
             continue;
         }
 
         let mut buf = [0u8; 64];
 
-        match serial.read(&mut buf) {
+        match msc.read_packet(&mut buf) {
             Ok(count) if count > 0 => {
                 rled.set_high().ok();
                 // Echo back in upper case
@@ -64,7 +72,7 @@ fn main() -> ! {
 
                 let mut write_offset = 0;
                 while write_offset < count {
-                    match serial.write(&buf[write_offset..count]) {
+                    match msc.write_packet(&buf[write_offset..count]) {
                         Ok(len) if len > 0 => {
                             write_offset += len;
                         }
