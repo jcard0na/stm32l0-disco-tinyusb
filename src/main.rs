@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-// use cortex_m_semihosting::hprintln;
+use cortex_m_semihosting::hprintln;
 // pick a panicking behavior
 use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
                      // use panic_abort as _; // requires nightly
@@ -11,6 +11,10 @@ use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch
 use cortex_m_rt::entry;
 
 use stm32l0xx_hal as hal;
+
+use numtoa::NumToA;
+
+use hex_display::HexDisplayExt;
 
 use hal::{
     gpio::GpioExt,
@@ -41,7 +45,7 @@ fn main() -> ! {
     let mut msc = MscClass::new(
         &usb_bus,
         64u16,
-        usbd_mass_storage::InterfaceSubclass::Ufi,
+        usbd_mass_storage::InterfaceSubclass::ScsiTransparentCommandSet,
         usbd_mass_storage::InterfaceProtocol::BulkOnlyTransport,
     );
     // let mut serial = SerialPort::new(&usb_bus);
@@ -59,19 +63,19 @@ fn main() -> ! {
         }
 
         let mut buf = [0u8; 64];
+        let mut countstr = [0u8; 8];
 
         match msc.read_packet(&mut buf) {
             Ok(count) if count > 0 => {
                 rled.set_high().ok();
                 // Echo back in upper case
-                for c in buf[0..count].iter_mut() {
-                    if 0x61 <= *c && *c <= 0x7a {
-                        *c &= !0x20;
-                    }
-                }
+                hprintln!("Read packet {} bytes", count.numtoa_str(10, &mut countstr));
+                hprintln!("{}", buf[0..count].hex());
 
                 let mut write_offset = 0;
                 while write_offset < count {
+                    hprintln!("Write packet {} bytes", count.numtoa_str(10, &mut countstr));
+                    hprintln!("{}", buf[0..count].hex());
                     match msc.write_packet(&buf[write_offset..count]) {
                         Ok(len) if len > 0 => {
                             write_offset += len;
