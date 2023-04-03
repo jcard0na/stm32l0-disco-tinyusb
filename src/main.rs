@@ -67,7 +67,7 @@ fn main() -> ! {
     // );
     let bd = MyBlockDevice{};
     let rev: [u8; 1] = [1];
-    let mut scsi = Scsi::new(&usb_bus, 64u16, bd, "fake_vendor", "fake_product", rev);
+    let mut scsi = Scsi::new(&usb_bus, 64u16, bd, "fake_vdr", "fake_product", rev);
 
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x0930, 0x6545))
         .manufacturer("Fake company")
