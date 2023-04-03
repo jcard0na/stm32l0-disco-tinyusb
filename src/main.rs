@@ -20,29 +20,62 @@ use hal::{
     usb::{UsbBus, USB},
 };
 
-use hex_display::HexDisplayExt;
+// use hex_display::HexDisplayExt;
 use usb_device::prelude::*;
+use usbd_dfu::{DFUClass, DFUManifestationError, DFUMemError, DFUMemIO};
 use usbd_mass_storage::USB_CLASS_MSC;
-use usbd_scsi::{Scsi, BlockDevice};
 
-struct MyBlockDevice {
-
+struct MyMem {
+    buffer: [u8; 64],
+    flash_memory: [u8; 1024],
 }
 
-impl BlockDevice for MyBlockDevice {
-    const BLOCK_BYTES: usize = 64;
+impl DFUMemIO for MyMem {
+    const MEM_INFO_STRING: &'static str = "@Flash/0x00000000/1*1Kg";
+    const INITIAL_ADDRESS_POINTER: u32 = 0x0;
+    const PROGRAM_TIME_MS: u32 = 8;
+    const ERASE_TIME_MS: u32 = 50;
+    const FULL_ERASE_TIME_MS: u32 = 50;
+    const TRANSFER_SIZE: u16 = 64;
 
-    fn read_block(&self, lba: u32, block: &mut [u8]) -> Result<(), usbd_scsi::BlockDeviceError> {
-        hprintln!("{}", block.hex());
+    fn read(&mut self, address: u32, length: usize) -> Result<&[u8], DFUMemError> {
+        // TODO: check address value
+        let offset = address as usize;
+        hprintln!("read");
+        Ok(&self.flash_memory[offset..offset + length])
+    }
+
+    fn erase(&mut self, _address: u32) -> Result<(), DFUMemError> {
+        // TODO: check address value
+        self.flash_memory.fill(0xff);
+        // TODO: verify that block is erased successfully
         Ok(())
     }
 
-    fn write_block(&mut self, lba: u32, block: &[u8]) -> Result<(), usbd_scsi::BlockDeviceError> {
+    fn erase_all(&mut self) -> Result<(), DFUMemError> {
+        // There is only one block, erase it.
+        self.erase(0)
+    }
+
+    fn store_write_buffer(&mut self, src: &[u8]) -> Result<(), ()> {
+        self.buffer[..src.len()].copy_from_slice(src);
         Ok(())
     }
 
-    fn max_lba(&self) -> u32 {
-        1
+    fn program(&mut self, address: u32, length: usize) -> Result<(), DFUMemError> {
+        // TODO: check address value
+        let offset = address as usize;
+
+        // Write buffer to a memory
+        self.flash_memory[offset..offset + length].copy_from_slice(&self.buffer[..length]);
+
+        // TODO: verify that memory is programmed correctly
+        Ok(())
+    }
+
+    fn manifestation(&mut self) -> Result<(), DFUManifestationError> {
+        // Nothing to do to activate FW
+        Ok(())
     }
 }
 
@@ -59,52 +92,24 @@ fn main() -> ! {
     let usb = USB::new(dp.USB, gpioa.pa11, gpioa.pa12, hsi48);
     let usb_bus = UsbBus::new(usb);
 
-    // let mut msc = MscClass::new(
-    //     &usb_bus,
-    //     64u16,
-    //     usbd_mass_storage::InterfaceSubclass::ScsiTransparentCommandSet,
-    //     usbd_mass_storage::InterfaceProtocol::BulkOnlyTransport,
-    // );
-    let bd = MyBlockDevice{};
-    let rev: [u8; 1] = [1];
-    let mut scsi = Scsi::new(&usb_bus, 64u16, bd, "fake_vendor", "fake_product", rev);
-
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x0930, 0x6545))
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0xf055, 0xdf11))
         .manufacturer("Fake company")
         .product("Fake MSC")
         .serial_number("TEST")
-        .device_class(USB_CLASS_MSC)
+        // .device_class(USB_CLASS_MSC)
         .build();
 
+    let my_mem = MyMem {
+        buffer: [0u8; 64],
+        flash_memory: [0u8; 1024],
+    };
+
+    let mut dfu = DFUClass::new(&usb_bus, my_mem);
+
     loop {
-        if !usb_dev.poll(&mut [&mut scsi]) {
+        if !usb_dev.poll(&mut [&mut dfu]) {
             continue;
         }
-
-        // let mut buf = [0u8; 64];
-        // let mut countstr = [0u8; 8];
-
-        // match msc.read_packet(&mut buf) {
-        //     Ok(count) if count > 0 => {
-        //         rled.set_high().ok();
-        //         // Echo back in upper case
-        //         hprintln!("Read packet {} bytes", count.numtoa_str(10, &mut countstr));
-        //         hprintln!("{}", buf[0..count].hex());
-
-        //         let mut write_offset = 0;
-        //         while write_offset < count {
-        //             hprintln!("Write packet {} bytes", count.numtoa_str(10, &mut countstr));
-        //             hprintln!("{}", buf[0..count].hex());
-        //             match msc.write_packet(&buf[write_offset..count]) {
-        //                 Ok(len) if len > 0 => {
-        //                     write_offset += len;
-        //                 }
-        //                 _ => {}
-        //             }
-        //         }
-        //         rled.set_low().ok();
-        //     }
-        //     _ => {}
-        // }
+        hprintln!("usb activity?");
     }
 }
