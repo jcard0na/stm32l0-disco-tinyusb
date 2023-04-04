@@ -8,7 +8,6 @@
 use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
 
 use cortex_m_rt::entry;
-use cortex_m_semihosting::hprintln;
 
 use stm32l0xx_hal as hal;
 
@@ -42,7 +41,6 @@ impl DFUMemIO for MyMem {
     fn read(&mut self, address: u32, length: usize) -> Result<&[u8], DFUMemError> {
         // TODO: check address value
         let offset = address as usize;
-        hprintln!("read");
         Ok(&self.flash_memory[offset..offset + length])
     }
 
@@ -76,7 +74,6 @@ impl DFUMemIO for MyMem {
 
     fn manifestation(&mut self) -> Result<(), DFUManifestationError> {
         // Nothing to do to activate FW
-        hprintln!("manifestation");
         Ok(())
     }
 }
