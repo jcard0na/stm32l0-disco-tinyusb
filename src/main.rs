@@ -24,6 +24,7 @@ use hex_display::HexDisplayExt;
 use usb_device::prelude::*;
 use usbd_dfu::{DFUClass, DFUManifestationError, DFUMemError, DFUMemIO};
 use usbd_mass_storage::USB_CLASS_MSC;
+use usbd_webusb::{WebUsb, url_scheme};
 
 struct MyMem {
     buffer: [u8; 64],
@@ -98,6 +99,7 @@ fn main() -> ! {
         flash_memory: [0u8; 1024],
     };
 
+    let mut wusb = WebUsb::new(&usb_bus, url_scheme::HTTPS, "google.com");
     let mut dfu = DFUClass::new(&usb_bus, my_mem);
 
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0xf055, 0xdf11))
@@ -108,7 +110,7 @@ fn main() -> ! {
         .build();
 
     loop {
-        if !usb_dev.poll(&mut [&mut dfu]) {
+        if !usb_dev.poll(&mut [&mut wusb, &mut dfu]) {
             continue;
         }
     }
