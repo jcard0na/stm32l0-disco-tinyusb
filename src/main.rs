@@ -2,10 +2,10 @@
 #![no_main]
 
 // pick a panicking behavior
-use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
+// use panic_halt as _; // you can put a breakpoint on `rust_begin_unwind` to catch panics
                      // use panic_abort as _; // requires nightly
                      // use panic_itm as _; // logs messages over ITM; requires ITM support
-                     // use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
+use panic_semihosting as _; // logs messages to the host stderr; requires a debugger
 
 use cortex_m_rt::entry;
 use cortex_m_semihosting::hprintln;
@@ -20,7 +20,7 @@ use hal::{
     usb::{UsbBus, USB},
 };
 
-// use hex_display::HexDisplayExt;
+use hex_display::HexDisplayExt;
 use usb_device::prelude::*;
 use usbd_dfu::{DFUClass, DFUManifestationError, DFUMemError, DFUMemIO};
 use usbd_mass_storage::USB_CLASS_MSC;
@@ -75,6 +75,7 @@ impl DFUMemIO for MyMem {
 
     fn manifestation(&mut self) -> Result<(), DFUManifestationError> {
         // Nothing to do to activate FW
+        hprintln!("manifestation");
         Ok(())
     }
 }
@@ -92,13 +93,6 @@ fn main() -> ! {
     let usb = USB::new(dp.USB, gpioa.pa11, gpioa.pa12, hsi48);
     let usb_bus = UsbBus::new(usb);
 
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0xf055, 0xdf11))
-        .manufacturer("Fake company")
-        .product("Fake MSC")
-        .serial_number("TEST")
-        // .device_class(USB_CLASS_MSC)
-        .build();
-
     let my_mem = MyMem {
         buffer: [0u8; 64],
         flash_memory: [0u8; 1024],
@@ -106,10 +100,16 @@ fn main() -> ! {
 
     let mut dfu = DFUClass::new(&usb_bus, my_mem);
 
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0xf055, 0xdf11))
+        .manufacturer("Fake company")
+        .product("Fake MSC")
+        .serial_number("TEST")
+        // .device_class(USB_CLASS_MSC)
+        .build();
+
     loop {
         if !usb_dev.poll(&mut [&mut dfu]) {
             continue;
         }
-        hprintln!("usb activity?");
     }
 }

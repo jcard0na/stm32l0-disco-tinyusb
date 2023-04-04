@@ -19,6 +19,7 @@ hex-display = "0.3.0"
 numtoa = "0.2.4"
 usbd_scsi = "0.1.0"
 usbd-dfu = "0.3.0"
+panic-semihosting = "0.6.0"
 
 # this lets you use `cargo fix`!
 [[bin]]
