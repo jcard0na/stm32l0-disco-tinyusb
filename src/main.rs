@@ -31,16 +31,16 @@ struct MyMem {
 }
 
 impl DFUMemIO for MyMem {
-    const MEM_INFO_STRING: &'static str = "@Flash/0x00000000/1*1Kg";
+    const MEM_INFO_STRING: &'static str = "@Flash/0x00000000/65536*256 g";
     const INITIAL_ADDRESS_POINTER: u32 = 0x0;
-    const PROGRAM_TIME_MS: u32 = 8;
-    const ERASE_TIME_MS: u32 = 50;
-    const FULL_ERASE_TIME_MS: u32 = 50;
+    const PROGRAM_TIME_MS: u32 = 1;
+    const ERASE_TIME_MS: u32 = 1;
+    const FULL_ERASE_TIME_MS: u32 = 1;
     const TRANSFER_SIZE: u16 = 64;
 
     fn read(&mut self, address: u32, length: usize) -> Result<&[u8], DFUMemError> {
         // TODO: check address value
-        let offset = address as usize;
+        let offset = (address % 1024) as usize;
         Ok(&self.flash_memory[offset..offset + length])
     }
 
@@ -63,7 +63,7 @@ impl DFUMemIO for MyMem {
 
     fn program(&mut self, address: u32, length: usize) -> Result<(), DFUMemError> {
         // TODO: check address value
-        let offset = address as usize;
+        let offset = (address % 1024) as usize;
 
         // Write buffer to a memory
         self.flash_memory[offset..offset + length].copy_from_slice(&self.buffer[..length]);
@@ -103,6 +103,7 @@ fn main() -> ! {
         .manufacturer("Fake company")
         .product("Fake MSC")
         .serial_number("TEST")
+        .max_packet_size_0(64)
         // .device_class(USB_CLASS_MSC)
         .build();
 
